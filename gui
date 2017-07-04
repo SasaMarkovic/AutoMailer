@@ -1,0 +1,93 @@
+from tkinter import *
+
+import httplib2
+import schedule
+import smtplib
+import win32com.client
+from xml.dom.minidom import parseString
+from xml.parsers.expat import ExpatError
+
+fields = ('E-Mail', 'Password', 'Subject', 'Body')
+
+def makeform(root, fields):
+   #Creates dynamic form
+   entries = {}
+   for field in fields:
+      row = Frame(root)
+      lab = Label(row, width=22, text=field+": ", anchor='w')
+      ent = Entry(row)
+      ent.insert(0,"0")
+      row.pack(side=TOP, fill=X, padx=5, pady=5)
+      lab.pack(side=LEFT)
+      ent.pack(side=RIGHT, expand=YES, fill=X)
+      entries[field] = ent
+   return entries
+
+
+def activate(entries):
+   while True:
+      #feed atom server
+      gmail_feed_url = "https://mail.google.com/mail/feed/atom"
+      #get email and split it . feed/atom auth needs username, not email
+      user_email = entries["E-Mail"].get()
+      user = user_email.split("@")[0]
+      #get password
+      password = entries["Password"].get()
+
+      #httprequest on gmail feed atom server
+      http = httplib2.Http()
+      #create credentials
+      http.add_credentials(user,password)
+      # get the body
+      resp, content = http.request(gmail_feed_url, "GET", body={}, headers={})
+
+      #try parsing the content. INFO: while making an infinityloop, the parser is overloaded and gives error
+      try:
+         dom = parseString(content)
+      except ExpatError:
+         print("")
+      #get entries
+      feed_list = dom.getElementsByTagName("entry")
+      #loop in rss feed
+      for feed in feed_list:
+         check = feed.getElementsByTagName("author")[0].getElementsByTagName("email")[0].firstChild.nodeValue.strip()
+         if (check == "sasa.markovic@protonmail.ch"):
+            send_email(entries["Subject"].get(), entries['Body'].get(), entries['E-Mail'].get(), entries['Password'].get(), check)
+   print("")
+
+
+def send_email(subject, body, email, password, sender):
+   username = email
+   pw = password
+
+   # Create a text/plain message
+   msg = 'Subject: '+ subject +'\n\n'
+   msg = msg + "Sorry but the User '" + email +"' is not available\n\n\n" + body
+
+   # Mail from who? -me (Fastresponde@me.com)
+   me = 'FastResponde@me.com'
+   # Mail to who? -you
+   you = sender
+
+   # Open GMAIL server for Mail activities
+   server = smtplib.SMTP('smtp.gmail.com:587')
+   server.starttls()
+   server.login(username, pw)
+   server.sendmail(me, you, msg)
+   server.quit()
+
+#Main
+if __name__ == '__main__':
+   #create form
+   root = Tk()
+   #binding with lambda
+   ents = makeform(root, fields)
+   root.bind('<Return>', (lambda event, e=ents: fetch(e)))
+   #bind button
+   b1 = Button(root, text='Activate/Deactivate',
+          command=(lambda e=ents: activate(e)))
+   b1.pack(side=RIGHT, padx=5, pady=5)
+   #create mainloop
+   root.mainloop()
+
+
